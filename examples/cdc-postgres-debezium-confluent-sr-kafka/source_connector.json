@@ -1,0 +1,27 @@
+{
+  "name": "postgres-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "postgres",
+    "database.dbname": "postgres",
+    "database.server.name": "dbserver1",
+    "table.include.list": "public.device",
+    "plugin.name": "pgoutput",
+    "slot.name": "debezium_slot",
+    "publication.autocreate.mode": "filtered",
+    "database.history.kafka.bootstrap.servers": "cdc-demo-kafka-1:29092,cdc-demo-kafka-2:29093,cdc-demo-kafka-3:29094",
+    "database.history.kafka.topic": "schema-changes.postgres",
+    "key.converter":"io.confluent.connect.avro.AvroConverter",
+    "key.converter.schema.registry.url":"http://cdc-demo-schema-registry:8080",
+    "value.converter":"io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url":"http://cdc-demo-schema-registry:8080",
+    "schema.name.adjustment.mode":"avro",
+    "topic.prefix": "dbserver1",
+    "auto.create.topics.enable": "true",
+    "value.converter.auto.register.schemas": "true",
+    "key.converter.auto.register.schemas": "true"
+  }
+}
