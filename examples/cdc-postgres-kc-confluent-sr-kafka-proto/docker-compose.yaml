@@ -1,0 +1,123 @@
+version: '3.8'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.3
+    container_name: cdc-demo-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka-1:
+      image: confluentinc/cp-kafka:7.5.3
+      container_name: cdc-demo-kafka-1
+      ports:
+          - 9092:9092
+      environment:
+          - CLUSTER_ID=ZGRkZDM1YTA1MzQwNGQyYT
+          - BROKER_ID=1
+          - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+          - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9092,2@kafka-2:9093,3@kafka-3:9094
+          - KAFKA_LISTENERS=INTERNAL://:29092,EXTERNAL://:39092,CONTROLLER://kafka-1:9092
+          - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-1:29092,EXTERNAL://localhost:39092
+          - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+          - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+
+  kafka-2:
+      image: confluentinc/cp-kafka:7.5.3
+      container_name: cdc-demo-kafka-2
+      ports:
+          - 9093:9093
+      environment:
+          - CLUSTER_ID=ZGRkZDM1YTA1MzQwNGQyYT
+          - BROKER_ID=2
+          - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+          - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9092,2@kafka-2:9093,3@kafka-3:9094
+          - KAFKA_LISTENERS=INTERNAL://:29093,EXTERNAL://:39093,CONTROLLER://kafka-2:9093
+          - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-2:29093,EXTERNAL://localhost:39093
+          - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+          - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+
+  kafka-3:
+      image: confluentinc/cp-kafka:7.5.3
+      container_name: cdc-demo-kafka-3
+      ports:
+          - 9094:9094
+      environment:
+          - CLUSTER_ID=ZGRkZDM1YTA1MzQwNGQyYT
+          - BROKER_ID=3
+          - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+          - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9092,2@kafka-2:9093,3@kafka-3:9094
+          - KAFKA_LISTENERS=INTERNAL://:29094,EXTERNAL://:39094,CONTROLLER://kafka-3:9094
+          - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-3:29094,EXTERNAL://localhost:39094
+          - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+          - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+
+  postgres:
+    image: postgres:latest
+    container_name: cdc-demo-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.3
+    container_name: cdc-demo-schema-registry
+    environment:
+        SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: cdc-demo-kafka-1:29092,cdc-demo-kafka-2:29093,cdc-demo-kafka-3:29094
+        SCHEMA_REGISTRY_HOST_NAME: cdc-demo-schema-registry
+        SCHEMA_REGISTRY_LISTENERS: http://cdc-demo-schema-registry:8080,http://localhost:8080
+    depends_on:
+      - kafka-1
+      - kafka-2
+      - kafka-3
+    ports:
+      - "8080:8080"
+
+  connect:
+    image: confluentinc/cp-kafka-connect:7.5.0
+    container_name: cdc-demo-kafka-connect
+    depends_on:
+      - kafka-1
+      - kafka-2
+      - kafka-3
+      - postgres
+      - schema-registry
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: cdc-demo-kafka-1:29092,cdc-demo-kafka-2:29093,cdc-demo-kafka-3:29094
+      CONNECT_GROUP_ID: "kafka-connect"
+      CONNECT_CONFIG_STORAGE_TOPIC: "connect-configs"
+      CONNECT_OFFSET_STORAGE_TOPIC: "connect-offsets"
+      CONNECT_STATUS_STORAGE_TOPIC: "connect-statuses"
+      CONNECT_KEY_CONVERTER: "io.confluent.connect.protobuf.ProtobufConverter"
+      CONNECT_VALUE_CONVERTER: "io.confluent.connect.protobuf.ProtobufConverter"
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://cdc-demo-schema-registry:8080"
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: "http://cdc-demo-schema-registry:8080"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "cdc-demo-kafka-connect"
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/kafka/connect"
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./confluentinc-kafka-connect-protobuf-converter-7.7.0/lib:/kafka/connect/libs
+      - ./debezium-debezium-connector-postgresql-2.5.4/lib:/kafka/connect/libs
+
+  kafka-consumer-app:
+    image: python:3.9
+    container_name: cdc-demo-kafka-consumer-app
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./app:/app
+    working_dir: /app
+    command: /bin/bash -c "chmod +x /app/start.sh && /app/start.sh"
+
+
+volumes:
+  postgres_data:
